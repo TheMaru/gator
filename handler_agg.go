@@ -1,20 +1,30 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/TheMaru/gator/internal/rss"
 )
 
 func handlerAgg(s *state, cmd command) error {
-	tmpFeedDest := "https://www.wagslane.dev/index.xml"
-
-	rssFeed, err := rss.FetchFeed(context.Background(), tmpFeedDest)
+	if len(cmd.args) < 1 {
+		return errors.New("duration string as argument for request timeout needed")
+	}
+	duratiom, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
-		return fmt.Errorf("couldn't fetch feed: %w", err)
+		return err
+	}
+	fmt.Printf("Collecting feeds every %s\n", duratiom.Abs().String())
+
+	ticker := time.NewTicker(duratiom)
+	for ; ; <-ticker.C {
+		err = rss.ScrapeFeeds(s.db)
+		if err != nil {
+			return err
+		}
 	}
 
-	fmt.Printf("Feed: %+v\n", rssFeed)
 	return nil
 }
