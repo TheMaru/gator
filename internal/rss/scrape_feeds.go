@@ -3,10 +3,11 @@ package rss
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/TheMaru/gator/internal/database"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 func ScrapeFeeds(db *database.Queries) error {
@@ -31,8 +32,31 @@ func ScrapeFeeds(db *database.Queries) error {
 		return err
 	}
 
+	const layout = "Mon, 02 Jan 2006 15:04:05 -0700"
+
 	for _, item := range feedData.Channel.Item {
-		fmt.Println(item.Title)
+		t, err := time.Parse(layout, item.PubDate)
+		if err != nil {
+			return err
+		}
+		postParams := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: item.Description != ""},
+			PublishedAt: sql.NullTime{Time: t, Valid: true},
+			FeedID:      markedFeed.ID,
+		}
+
+		_, err = db.CreatePost(context.Background(), postParams)
+		if err != nil {
+			if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+				continue
+			}
+			return err
+		}
 	}
 
 	return nil
